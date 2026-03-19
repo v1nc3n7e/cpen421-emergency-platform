@@ -1,0 +1,209 @@
+openapi: 3.0.0
+info:
+  title: CPEN421 - Identity and Authentication Service
+  version: 1.0.0
+  description: Microservice 1 — Identity and Authentication for the National Emergency Response Platform
+
+servers:
+  - url: http://localhost:3001
+    description: Local development server
+
+tags:
+  - name: Auth
+    description: Authentication and user management
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        userId:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [system_admin, hospital_admin, police_admin, fire_service_admin]
+        stationId:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        createdDate:
+          type: string
+          format: date-time
+
+paths:
+  /health:
+    get:
+      tags: [Auth]
+      summary: Health check
+      responses:
+        "200":
+          description: Service is running
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, role]
+              properties:
+                name:
+                  type: string
+                  example: Kofi Mensah
+                email:
+                  type: string
+                  example: kofi@dispatch.gov.gh
+                password:
+                  type: string
+                  example: SecurePass1
+                role:
+                  type: string
+                  enum:
+                    [
+                      system_admin,
+                      hospital_admin,
+                      police_admin,
+                      fire_service_admin,
+                    ]
+                stationId:
+                  type: string
+                  nullable: true
+      responses:
+        "201":
+          description: User registered successfully
+        "409":
+          description: Email already exists
+        "422":
+          description: Validation error
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login and receive tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  example: kofi@dispatch.gov.gh
+                password:
+                  type: string
+                  example: SecurePass1
+      responses:
+        "200":
+          description: Login successful
+        "401":
+          description: Invalid credentials
+
+  /auth/refresh-token:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        "200":
+          description: New tokens issued
+        "401":
+          description: Invalid or expired refresh token
+
+  /auth/profile:
+    get:
+      tags: [Auth]
+      summary: Get authenticated user profile
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Profile returned
+        "401":
+          description: Unauthorized
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout and revoke refresh token
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        "200":
+          description: Logged out successfully
+
+  /auth/users:
+    get:
+      tags: [Auth]
+      summary: List all users (system_admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of users
+        "403":
+          description: Forbidden
+
+  /auth/verify-token:
+    post:
+      tags: [Auth]
+      summary: Validate a JWT token (used by other microservices)
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Token is valid
+        "401":
+          description: Invalid or expired token

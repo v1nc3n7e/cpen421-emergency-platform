@@ -1,0 +1,160 @@
+openapi: 3.0.0
+info:
+  title: CPEN421 - Dispatch Tracking Service
+  version: 1.0.0
+  description: Microservice 3 — Real-time vehicle GPS tracking for emergency dispatch
+
+servers:
+  - url: http://localhost:3003
+    description: Local development server
+
+tags:
+  - name: Vehicles
+    description: Vehicle registration and location tracking
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+paths:
+  /health:
+    get:
+      tags: [Vehicles]
+      summary: Health check
+      responses:
+        "200":
+          description: Service is running
+
+  /vehicles/register:
+    post:
+      tags: [Vehicles]
+      summary: Register a new vehicle
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [vehicleId, type, stationId]
+              properties:
+                vehicleId:
+                  type: string
+                  example: AMB-001
+                type:
+                  type: string
+                  enum: [ambulance, police, fire]
+                stationId:
+                  type: string
+                  example: station-uuid-here
+                driverName:
+                  type: string
+                  example: Kwame Asante
+      responses:
+        "201":
+          description: Vehicle registered
+        "409":
+          description: Vehicle ID already exists
+
+  /vehicles:
+    get:
+      tags: [Vehicles]
+      summary: Get all vehicles
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [ambulance, police, fire]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [available, dispatched, returning]
+      responses:
+        "200":
+          description: List of vehicles
+
+  /vehicles/{id}/location:
+    get:
+      tags: [Vehicles]
+      summary: Get current location of a vehicle
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: AMB-001
+      responses:
+        "200":
+          description: Vehicle location returned
+        "404":
+          description: Vehicle not found
+    put:
+      tags: [Vehicles]
+      summary: Update vehicle GPS location (called by driver)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: AMB-001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [latitude, longitude]
+              properties:
+                latitude:
+                  type: number
+                  example: 5.6037
+                longitude:
+                  type: number
+                  example: -0.1870
+      responses:
+        "200":
+          description: Location updated
+
+  /vehicles/{id}/status:
+    put:
+      tags: [Vehicles]
+      summary: Update vehicle status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [available, dispatched, returning]
+                incidentServiceId:
+                  type: string
+                  nullable: true
+      responses:
+        "200":
+          description: Status updated

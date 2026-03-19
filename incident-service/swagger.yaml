@@ -1,0 +1,202 @@
+openapi: 3.0.0
+info:
+  title: CPEN421 - Emergency Incident Service
+  version: 1.0.0
+  description: Microservice 2 — Records and manages emergency incidents
+
+servers:
+  - url: http://localhost:3002
+    description: Local development server
+
+tags:
+  - name: Incidents
+    description: Emergency incident management
+  - name: Responders
+    description: Responder registration and management
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+paths:
+  /health:
+    get:
+      tags: [Incidents]
+      summary: Health check
+      responses:
+        "200":
+          description: Service is running
+
+  /incidents:
+    post:
+      tags: [Incidents]
+      summary: Create a new incident and auto-dispatch nearest responder
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [citizenName, incidentType, latitude, longitude]
+              properties:
+                citizenName:
+                  type: string
+                  example: Ama Owusu
+                incidentType:
+                  type: string
+                  enum:
+                    [robbery, crime, fire, medical_emergency, accident, other]
+                latitude:
+                  type: number
+                  example: 5.6037
+                longitude:
+                  type: number
+                  example: -0.1870
+                notes:
+                  type: string
+                  example: Caller reports smoke coming from building
+      responses:
+        "201":
+          description: Incident created and responder dispatched
+        "422":
+          description: Validation error
+
+  /incidents/open:
+    get:
+      tags: [Incidents]
+      summary: Get all open incidents
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of open incidents
+
+  /incidents/{id}:
+    get:
+      tags: [Incidents]
+      summary: Get a single incident by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Incident found
+        "404":
+          description: Incident not found
+
+  /incidents/{id}/status:
+    put:
+      tags: [Incidents]
+      summary: Update incident status
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [created, dispatched, in_progress, resolved]
+      responses:
+        "200":
+          description: Status updated
+
+  /incidents/{id}/assign:
+    put:
+      tags: [Incidents]
+      summary: Manually assign a responder to an incident
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [responderId]
+              properties:
+                responderId:
+                  type: string
+      responses:
+        "200":
+          description: Responder assigned
+
+  /responders:
+    post:
+      tags: [Responders]
+      summary: Register a new responder
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type, latitude, longitude]
+              properties:
+                name:
+                  type: string
+                  example: Accra Central Police Station
+                type:
+                  type: string
+                  enum: [police, fire, ambulance]
+                latitude:
+                  type: number
+                  example: 5.5502
+                longitude:
+                  type: number
+                  example: -0.2174
+                hospitalId:
+                  type: string
+                  nullable: true
+                stationId:
+                  type: string
+                  nullable: true
+      responses:
+        "201":
+          description: Responder registered
+    get:
+      tags: [Responders]
+      summary: Get all responders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [police, fire, ambulance]
+        - name: isAvailable
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of responders

@@ -1,0 +1,162 @@
+openapi: 3.0.0
+info:
+  title: CPEN421 - Analytics and Monitoring Service
+  version: 1.0.0
+  description: Microservice 4 — Aggregates data from all services to produce operational insights
+
+servers:
+  - url: http://localhost:3004
+    description: Local development server
+
+tags:
+  - name: Analytics
+    description: Operational analytics and monitoring
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+paths:
+  /health:
+    get:
+      tags: [Analytics]
+      summary: Health check
+      responses:
+        "200":
+          description: Service is running
+
+  /analytics/response-times:
+    get:
+      tags: [Analytics]
+      summary: Average response times by incident type
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Response time statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      overall:
+                        type: object
+                        properties:
+                          total_incidents:
+                            type: integer
+                          resolved:
+                            type: integer
+                          dispatched:
+                            type: integer
+                          in_progress:
+                            type: integer
+                          pending:
+                            type: integer
+                          overall_avg_response_minutes:
+                            type: number
+                      byIncidentType:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            incident_type:
+                              type: string
+                            total_incidents:
+                              type: integer
+                            avg_response_time_minutes:
+                              type: number
+                            min_response_time_minutes:
+                              type: number
+                            max_response_time_minutes:
+                              type: number
+
+  /analytics/incidents-by-region:
+    get:
+      tags: [Analytics]
+      summary: Number of incidents grouped by type and status
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Incident statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      byIncidentType:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            incident_type:
+                              type: string
+                            total:
+                              type: integer
+                            resolved:
+                              type: integer
+                            open:
+                              type: integer
+                      byStatus:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            status:
+                              type: string
+                            total:
+                              type: integer
+                      recentIncidents:
+                        type: array
+
+  /analytics/resource-utilization:
+    get:
+      tags: [Analytics]
+      summary: Responder and vehicle utilization statistics
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Resource utilization data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      responderUtilization:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            type:
+                              type: string
+                            total:
+                              type: integer
+                            available:
+                              type: integer
+                            deployed:
+                              type: integer
+                      topDeployedResponders:
+                        type: array
+                      vehicleUtilization:
+                        type: array
+                      vehicles:
+                        type: array
