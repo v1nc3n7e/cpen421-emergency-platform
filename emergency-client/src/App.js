@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Navbar from "./components/Navbar";
@@ -20,11 +20,23 @@ function PrivateRoute({ children }) {
           justifyContent: "center",
           alignItems: "center",
           height: "100vh",
-          fontSize: "16px",
-          color: "#6b7280",
+          backgroundColor: "#f8fafc",
         }}
       >
-        Loading...
+        <div style={{ textAlign: "center" }}>
+          <div
+            style={{
+              width: "36px",
+              height: "36px",
+              border: "3px solid #e2e8f0",
+              borderTop: "3px solid #0f172a",
+              borderRadius: "50%",
+              animation: "spin 0.8s linear infinite",
+              margin: "0 auto 12px",
+            }}
+          />
+          <p style={{ color: "#94a3b8", fontSize: "14px" }}>Loading...</p>
+        </div>
       </div>
     );
   return user ? children : <Navigate to="/login" />;
@@ -32,6 +44,24 @@ function PrivateRoute({ children }) {
 
 function AppLayout() {
   const { user } = useAuth();
+
+  useEffect(() => {
+    const style = document.createElement("style");
+    style.textContent = `
+      @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: 'DM Sans', -apple-system, sans-serif; background-color: #f8fafc; color: #0f172a; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+      @keyframes slideIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+      input:focus, select:focus, textarea:focus { outline: none; border-color: #0f172a !important; box-shadow: 0 0 0 3px rgba(15,23,42,0.08); }
+      a { text-decoration: none; }
+      button:hover { opacity: 0.85; }
+    `;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>
@@ -43,17 +73,19 @@ function AppLayout() {
           path="/*"
           element={
             <PrivateRoute>
-              <div style={{ minHeight: "100vh", backgroundColor: "#f0f4f8" }}>
+              <div style={{ minHeight: "100vh", backgroundColor: "#f8fafc" }}>
                 <Navbar />
-                <Routes>
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/incidents" element={<IncidentForm />} />
-                  <Route path="/dispatch" element={<DispatchStatus />} />
-                  <Route path="/tracking" element={<VehicleTracking />} />
-                  <Route path="/analytics" element={<Analytics />} />
-                  <Route path="/register" element={<Register />} />
-                  <Route path="*" element={<Navigate to="/dashboard" />} />
-                </Routes>
+                <main style={{ animation: "slideIn 0.2s ease" }}>
+                  <Routes>
+                    <Route path="/dashboard" element={<Dashboard />} />
+                    <Route path="/incidents" element={<IncidentForm />} />
+                    <Route path="/dispatch" element={<DispatchStatus />} />
+                    <Route path="/tracking" element={<VehicleTracking />} />
+                    <Route path="/analytics" element={<Analytics />} />
+                    <Route path="/register" element={<Register />} />
+                    <Route path="*" element={<Navigate to="/dashboard" />} />
+                  </Routes>
+                </main>
               </div>
             </PrivateRoute>
           }

@@ -2,6 +2,36 @@ import React, { useEffect, useState } from "react";
 import { getOpenIncidents, getResponders, getVehicles } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 
+const statusConfig = {
+  created: { color: "#f59e0b", bg: "#fffbeb", label: "Created" },
+  dispatched: { color: "#3b82f6", bg: "#eff6ff", label: "Dispatched" },
+  in_progress: { color: "#8b5cf6", bg: "#f5f3ff", label: "In Progress" },
+  resolved: { color: "#22c55e", bg: "#f0fdf4", label: "Resolved" },
+};
+
+const typeIcons = {
+  robbery: "🔫",
+  crime: "⚠️",
+  fire: "🔥",
+  medical_emergency: "🏥",
+  accident: "🚗",
+  other: "📋",
+};
+
+function StatCard({ value, label, color, icon }) {
+  return (
+    <div style={s.statCard}>
+      <div style={{ ...s.statIcon, backgroundColor: color + "15" }}>
+        <span style={{ fontSize: "20px" }}>{icon}</span>
+      </div>
+      <div>
+        <div style={s.statValue}>{value}</div>
+        <div style={s.statLabel}>{label}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const [incidents, setIncidents] = useState([]);
@@ -20,158 +50,302 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  const statusColor = {
-    created: "#f59e0b",
-    dispatched: "#3b82f6",
-    in_progress: "#8b5cf6",
-    resolved: "#10b981",
-  };
-
-  if (loading) return <div style={styles.loading}>Loading dashboard...</div>;
+  if (loading)
+    return (
+      <div style={s.loadingWrap}>
+        <div style={s.loadingDot} />
+        <span style={s.loadingText}>Loading dashboard...</span>
+      </div>
+    );
 
   return (
-    <div style={styles.container}>
-      <h2 style={styles.title}>Welcome, {user?.name}</h2>
-      <p style={styles.subtitle}>Role: {user?.role?.replace(/_/g, " ")}</p>
-
-      <div style={styles.statsGrid}>
-        <div style={{ ...styles.statCard, borderTop: "4px solid #ef4444" }}>
-          <div style={styles.statNum}>{incidents.length}</div>
-          <div style={styles.statLabel}>Open Incidents</div>
+    <div style={s.page}>
+      <div style={s.header}>
+        <div>
+          <h1 style={s.title}>Dashboard</h1>
+          <p style={s.subtitle}>
+            Welcome back, {user?.name} — here's what's happening
+          </p>
         </div>
-        <div style={{ ...styles.statCard, borderTop: "4px solid #3b82f6" }}>
-          <div style={styles.statNum}>
-            {incidents.filter((i) => i.status === "dispatched").length}
-          </div>
-          <div style={styles.statLabel}>Dispatched</div>
-        </div>
-        <div style={{ ...styles.statCard, borderTop: "4px solid #10b981" }}>
-          <div style={styles.statNum}>
-            {responders.filter((r) => r.isAvailable).length}
-          </div>
-          <div style={styles.statLabel}>Available Responders</div>
-        </div>
-        <div style={{ ...styles.statCard, borderTop: "4px solid #8b5cf6" }}>
-          <div style={styles.statNum}>{vehicles.length}</div>
-          <div style={styles.statLabel}>Registered Vehicles</div>
+        <div style={s.time}>
+          {new Date().toLocaleDateString("en-GH", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          })}
         </div>
       </div>
 
-      <h3 style={styles.sectionTitle}>Recent Open Incidents</h3>
-      {incidents.length === 0 ? (
-        <p style={styles.empty}>No open incidents at the moment.</p>
-      ) : (
-        <table style={styles.table}>
-          <thead>
-            <tr style={styles.thead}>
-              <th style={styles.th}>Citizen</th>
-              <th style={styles.th}>Type</th>
-              <th style={styles.th}>Assigned Unit</th>
-              <th style={styles.th}>Status</th>
-              <th style={styles.th}>Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            {incidents.slice(0, 10).map((inc, i) => (
-              <tr
-                key={inc.incidentId}
-                style={{ backgroundColor: i % 2 === 0 ? "white" : "#f9fafb" }}
-              >
-                <td style={styles.td}>{inc.citizenName}</td>
-                <td style={styles.td}>{inc.incidentType.replace("_", " ")}</td>
-                <td style={styles.td}>{inc.assignedUnit || "Unassigned"}</td>
-                <td style={styles.td}>
-                  <span
-                    style={{
-                      ...styles.badge,
-                      backgroundColor: statusColor[inc.status] + "20",
-                      color: statusColor[inc.status],
-                    }}
-                  >
-                    {inc.status.replace("_", " ")}
-                  </span>
-                </td>
-                <td style={styles.td}>
-                  {new Date(inc.createdAt).toLocaleString()}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <div style={s.statsGrid}>
+        <StatCard
+          value={incidents.length}
+          label="Open Incidents"
+          color="#ef4444"
+          icon="🚨"
+        />
+        <StatCard
+          value={incidents.filter((i) => i.status === "dispatched").length}
+          label="Dispatched"
+          color="#3b82f6"
+          icon="🚔"
+        />
+        <StatCard
+          value={incidents.filter((i) => i.status === "in_progress").length}
+          label="In Progress"
+          color="#8b5cf6"
+          icon="⚡"
+        />
+        <StatCard
+          value={responders.filter((r) => r.isAvailable).length}
+          label="Available Responders"
+          color="#22c55e"
+          icon="✅"
+        />
+        <StatCard
+          value={responders.filter((r) => !r.isAvailable).length}
+          label="Deployed"
+          color="#f59e0b"
+          icon="📡"
+        />
+        <StatCard
+          value={vehicles.length}
+          label="Registered Vehicles"
+          color="#0ea5e9"
+          icon="🚑"
+        />
+      </div>
+
+      <div style={s.section}>
+        <div style={s.sectionHeader}>
+          <h2 style={s.sectionTitle}>Active Incidents</h2>
+          <span style={s.badge}>{incidents.length} open</span>
+        </div>
+
+        {incidents.length === 0 ? (
+          <div style={s.empty}>
+            <span style={{ fontSize: "40px" }}>✅</span>
+            <p style={s.emptyText}>No active incidents at the moment</p>
+          </div>
+        ) : (
+          <div style={s.tableWrap}>
+            <table style={s.table}>
+              <thead>
+                <tr>
+                  {[
+                    "Type",
+                    "Citizen",
+                    "Assigned Unit",
+                    "Status",
+                    "Location",
+                    "Time",
+                  ].map((h) => (
+                    <th key={h} style={s.th}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {incidents.slice(0, 12).map((inc, i) => {
+                  const sc = statusConfig[inc.status] || statusConfig.created;
+                  return (
+                    <tr
+                      key={inc.incidentId}
+                      style={{
+                        backgroundColor: i % 2 === 0 ? "#ffffff" : "#f8fafc",
+                      }}
+                    >
+                      <td style={s.td}>
+                        <span style={s.typeCell}>
+                          <span style={{ fontSize: "16px" }}>
+                            {typeIcons[inc.incidentType] || "📋"}
+                          </span>
+                          <span style={s.typeText}>
+                            {inc.incidentType.replace(/_/g, " ")}
+                          </span>
+                        </span>
+                      </td>
+                      <td style={s.td}>{inc.citizenName}</td>
+                      <td style={s.td}>
+                        {inc.assignedUnit ? (
+                          <span style={s.assignedUnit}>{inc.assignedUnit}</span>
+                        ) : (
+                          <span style={s.unassigned}>Unassigned</span>
+                        )}
+                      </td>
+                      <td style={s.td}>
+                        <span
+                          style={{
+                            ...s.statusBadge,
+                            backgroundColor: sc.bg,
+                            color: sc.color,
+                          }}
+                        >
+                          {sc.label}
+                        </span>
+                      </td>
+                      <td
+                        style={{
+                          ...s.td,
+                          fontFamily: "monospace",
+                          fontSize: "12px",
+                          color: "#64748b",
+                        }}
+                      >
+                        {inc.latitude?.toFixed(3)}, {inc.longitude?.toFixed(3)}
+                      </td>
+                      <td
+                        style={{ ...s.td, color: "#94a3b8", fontSize: "12px" }}
+                      >
+                        {new Date(inc.createdAt).toLocaleTimeString()}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-const styles = {
-  container: { padding: "24px", maxWidth: "1200px", margin: "0 auto" },
+const s = {
+  page: { padding: "32px", maxWidth: "1400px", margin: "0 auto" },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: "28px",
+  },
   title: {
-    fontSize: "24px",
-    fontWeight: "bold",
-    color: "#1a3a5c",
+    fontSize: "26px",
+    fontWeight: "700",
+    color: "#0f172a",
     margin: "0 0 4px",
+    letterSpacing: "-0.5px",
   },
-  subtitle: {
-    fontSize: "14px",
-    color: "#6b7280",
-    margin: "0 0 24px",
-    textTransform: "capitalize",
-  },
+  subtitle: { fontSize: "14px", color: "#64748b", margin: 0 },
+  time: { fontSize: "13px", color: "#94a3b8", paddingTop: "6px" },
   statsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
-    gap: "16px",
-    marginBottom: "32px",
+    gridTemplateColumns: "repeat(6, 1fr)",
+    gap: "12px",
+    marginBottom: "28px",
   },
   statCard: {
-    backgroundColor: "white",
-    borderRadius: "10px",
-    padding: "20px",
-    boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
+    backgroundColor: "#ffffff",
+    borderRadius: "12px",
+    padding: "16px",
+    border: "1px solid #e2e8f0",
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
   },
-  statNum: { fontSize: "36px", fontWeight: "bold", color: "#1a3a5c" },
-  statLabel: { fontSize: "13px", color: "#6b7280", marginTop: "4px" },
-  sectionTitle: {
-    fontSize: "18px",
-    fontWeight: "600",
-    color: "#1a3a5c",
-    marginBottom: "12px",
-  },
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
-    backgroundColor: "white",
+  statIcon: {
+    width: "44px",
+    height: "44px",
     borderRadius: "10px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  statValue: {
+    fontSize: "24px",
+    fontWeight: "700",
+    color: "#0f172a",
+    lineHeight: 1,
+    letterSpacing: "-0.5px",
+  },
+  statLabel: {
+    fontSize: "11px",
+    color: "#94a3b8",
+    marginTop: "3px",
+    fontWeight: "500",
+    textTransform: "uppercase",
+    letterSpacing: "0.4px",
+  },
+  section: {
+    backgroundColor: "#ffffff",
+    borderRadius: "14px",
+    border: "1px solid #e2e8f0",
     overflow: "hidden",
-    boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
   },
-  thead: { backgroundColor: "#1a3a5c" },
+  sectionHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    padding: "18px 24px",
+    borderBottom: "1px solid #f1f5f9",
+  },
+  sectionTitle: {
+    fontSize: "15px",
+    fontWeight: "600",
+    color: "#0f172a",
+    margin: 0,
+  },
+  badge: {
+    backgroundColor: "#fef2f2",
+    color: "#ef4444",
+    fontSize: "12px",
+    fontWeight: "600",
+    padding: "3px 10px",
+    borderRadius: "20px",
+  },
+  tableWrap: { overflowX: "auto" },
+  table: { width: "100%", borderCollapse: "collapse" },
   th: {
     padding: "12px 16px",
     textAlign: "left",
-    fontSize: "13px",
-    color: "white",
+    fontSize: "11px",
     fontWeight: "600",
+    color: "#94a3b8",
+    textTransform: "uppercase",
+    letterSpacing: "0.5px",
+    backgroundColor: "#f8fafc",
+    borderBottom: "1px solid #e2e8f0",
   },
   td: {
-    padding: "12px 16px",
+    padding: "13px 16px",
     fontSize: "13px",
     color: "#374151",
-    borderBottom: "1px solid #f3f4f6",
+    borderBottom: "1px solid #f1f5f9",
   },
-  badge: {
+  typeCell: { display: "flex", alignItems: "center", gap: "8px" },
+  typeText: { fontWeight: "500", textTransform: "capitalize" },
+  statusBadge: {
     padding: "3px 10px",
     borderRadius: "20px",
-    fontSize: "12px",
-    fontWeight: "500",
+    fontSize: "11px",
+    fontWeight: "600",
+    whiteSpace: "nowrap",
   },
-  loading: {
+  assignedUnit: { fontSize: "13px", color: "#0f172a", fontWeight: "500" },
+  unassigned: { fontSize: "12px", color: "#cbd5e1", fontStyle: "italic" },
+  loadingWrap: {
     display: "flex",
-    justifyContent: "center",
     alignItems: "center",
-    height: "200px",
-    fontSize: "16px",
-    color: "#6b7280",
+    justifyContent: "center",
+    gap: "12px",
+    height: "300px",
   },
-  empty: { color: "#6b7280", fontSize: "14px" },
+  loadingDot: {
+    width: "8px",
+    height: "8px",
+    borderRadius: "50%",
+    backgroundColor: "#ef4444",
+    animation: "pulse 1s ease infinite",
+  },
+  loadingText: { fontSize: "14px", color: "#94a3b8" },
+  empty: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "12px",
+    padding: "60px",
+  },
+  emptyText: { fontSize: "14px", color: "#94a3b8", margin: 0 },
 };
