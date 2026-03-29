@@ -1,11 +1,18 @@
 const { Pool } = require("pg");
 
+const sslConfig =
+  process.env.NODE_ENV === "production"
+    ? { ssl: { rejectUnauthorized: false } }
+    : {};
+
 const incidentPool = new Pool({
   connectionString: process.env.INCIDENT_DB_URL,
+  ...sslConfig,
 });
 
 const dispatchPool = new Pool({
   connectionString: process.env.DISPATCH_DB_URL,
+  ...sslConfig,
 });
 
 const connectDB = async () => {
