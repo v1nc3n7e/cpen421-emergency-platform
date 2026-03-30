@@ -13,20 +13,20 @@ const seedAdmin = async () => {
   try {
     const User = require("../models/User");
     const existing = await User.findOne({
-      where: { email: "admin@emergency.gov.gh" },
+      where: { email: "Group29@emergency.gov.gh" },
     });
     if (!existing) {
       await User.create({
         userId: require("uuid").v4(),
         name: "System Administrator",
-        email: "admin@emergency.gov.gh",
-        passwordHash: "Admin1234",
+        email: "Group29@emergency.gov.gh",
+        passwordHash: "Group29000",
         role: "system_admin",
         stationId: null,
       });
       console.log("Default admin user created.");
-      console.log("Email: admin@emergency.gov.gh");
-      console.log("Password: Admin1234");
+      console.log("Email: youremail@example.com");
+      console.log("Password: YourPassword1");
     }
   } catch (error) {
     console.error("Seed error:", error.message);
