@@ -5,6 +5,8 @@ info:
   description: Microservice 1 — Identity and Authentication for the National Emergency Response Platform
 
 servers:
+  - url: https://auth-service-1dnp.onrender.com
+    description: Production server
   - url: http://localhost:3001
     description: Local development server
 
