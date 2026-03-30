@@ -5,9 +5,10 @@ info:
   description: Microservice 3 — Real-time vehicle GPS tracking for emergency dispatch
 
 servers:
+  - url: https://dispatch-service-lhfw.onrender.com
+    description: Production server
   - url: http://localhost:3003
     description: Local development server
-
 tags:
   - name: Vehicles
     description: Vehicle registration and location tracking
