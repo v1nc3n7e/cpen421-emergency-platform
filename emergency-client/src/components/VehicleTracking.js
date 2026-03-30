@@ -1,49 +1,55 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   GoogleMap,
   useJsApiLoader,
   Marker,
   InfoWindow,
+  Polyline,
 } from "@react-google-maps/api";
 import { io } from "socket.io-client";
-import { getVehicles } from "../services/api";
+import { getVehicles, getOpenIncidents } from "../services/api";
+import axios from "axios";
 
 const mapContainerStyle = {
   width: "100%",
-  height: "500px",
-  borderRadius: "8px",
+  height: "540px",
+  borderRadius: "10px",
 };
 const center = { lat: 5.6037, lng: -0.187 };
-
-const vehicleIcon = { ambulance: "🚑", police: "🚔", fire: "🚒" };
+const vehicleEmoji = { ambulance: "🚑", police: "🚔", fire: "🚒" };
 const statusColor = {
-  available: "#10b981",
+  available: "#22c55e",
   dispatched: "#ef4444",
   returning: "#f59e0b",
 };
 
 export default function VehicleTracking() {
   const [vehicles, setVehicles] = useState([]);
+  const [incidents, setIncidents] = useState([]);
   const [selected, setSelected] = useState(null);
   const [connected, setConnected] = useState(false);
+  const [paths, setPaths] = useState({});
+  const [simulating, setSimulating] = useState({});
   const socketRef = useRef(null);
+  const simIntervals = useRef({});
 
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_KEY,
   });
 
   useEffect(() => {
-    getVehicles()
-      .then((res) => setVehicles(res.data.data))
+    Promise.all([getVehicles(), getOpenIncidents()])
+      .then(([v, i]) => {
+        setVehicles(v.data.data);
+        setIncidents(i.data.data);
+      })
       .catch(console.error);
 
     socketRef.current = io(process.env.REACT_APP_DISPATCH_SERVICE);
-
     socketRef.current.on("connect", () => {
       setConnected(true);
       socketRef.current.emit("join_admin");
     });
-
     socketRef.current.on("disconnect", () => setConnected(false));
 
     socketRef.current.on("vehicle_moved", (data) => {
@@ -60,33 +66,109 @@ export default function VehicleTracking() {
             : v,
         ),
       );
+      setPaths((prev) => ({
+        ...prev,
+        [data.vehicleId]: [
+          ...(prev[data.vehicleId] || []),
+          { lat: data.latitude, lng: data.longitude },
+        ],
+      }));
     });
 
-    return () => socketRef.current?.disconnect();
+    socketRef.current.on("vehicle_dispatched", (data) => {
+      setVehicles((prev) =>
+        prev.map((v) =>
+          v.vehicleId === data.vehicleId
+            ? { ...v, status: "dispatched", incidentServiceId: data.incidentId }
+            : v,
+        ),
+      );
+    });
+
+    return () => {
+      socketRef.current?.disconnect();
+      Object.values(simIntervals.current).forEach(clearInterval);
+    };
   }, []);
+
+  const simulateMovement = (vehicleId, startLat, startLng) => {
+    if (simulating[vehicleId]) {
+      clearInterval(simIntervals.current[vehicleId]);
+      setSimulating((prev) => ({ ...prev, [vehicleId]: false }));
+      return;
+    }
+
+    setSimulating((prev) => ({ ...prev, [vehicleId]: true }));
+    let lat = startLat || 5.6037;
+    let lng = startLng || -0.187;
+
+    simIntervals.current[vehicleId] = setInterval(async () => {
+      lat += (Math.random() - 0.5) * 0.002;
+      lng += (Math.random() - 0.5) * 0.002;
+      try {
+        const token = localStorage.getItem("accessToken");
+        await axios.put(
+          `${process.env.REACT_APP_DISPATCH_SERVICE}/vehicles/${vehicleId}/location`,
+          { latitude: lat, longitude: lng },
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+      } catch (err) {
+        console.error("Simulation error:", err);
+      }
+    }, 3000);
+  };
+
+  const assignVehicle = async (vehicleId, incidentId) => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      await axios.post(
+        `${process.env.REACT_APP_DISPATCH_SERVICE}/vehicles/assign`,
+        { vehicleId, incidentId },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      const v = await getVehicles();
+      setVehicles(v.data.data);
+      alert(`Vehicle ${vehicleId} assigned to incident successfully.`);
+    } catch (err) {
+      alert("Failed to assign vehicle.");
+    }
+  };
 
   const vehiclesWithLocation = vehicles.filter(
     (v) => v.latitude && v.longitude,
   );
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h2 style={styles.title}>Vehicle Tracking</h2>
+    <div style={s.page}>
+      <div style={s.header}>
+        <div>
+          <h1 style={s.title}>Vehicle Tracking</h1>
+          <p style={s.subtitle}>Real-time GPS tracking via WebSocket</p>
+        </div>
         <span
           style={{
-            ...styles.connBadge,
-            backgroundColor: connected ? "#dcfce7" : "#fee2e2",
+            ...s.connBadge,
+            backgroundColor: connected ? "#f0fdf4" : "#fef2f2",
             color: connected ? "#16a34a" : "#dc2626",
+            border: `1px solid ${connected ? "#bbf7d0" : "#fecaca"}`,
           }}
         >
-          {connected ? "🟢 Live" : "🔴 Disconnected"}
+          <span
+            style={{
+              width: "8px",
+              height: "8px",
+              borderRadius: "50%",
+              backgroundColor: connected ? "#22c55e" : "#ef4444",
+              display: "inline-block",
+              marginRight: "6px",
+            }}
+          />
+          {connected ? "Live" : "Disconnected"}
         </span>
       </div>
-      <p style={styles.subtitle}>Real-time vehicle locations via WebSocket</p>
 
-      <div style={styles.layout}>
-        <div style={styles.mapWrapper}>
+      <div style={s.layout}>
+        <div style={s.mapSide}>
           {isLoaded ? (
             <GoogleMap
               mapContainerStyle={mapContainerStyle}
@@ -99,139 +181,244 @@ export default function VehicleTracking() {
                   position={{ lat: v.latitude, lng: v.longitude }}
                   onClick={() => setSelected(v)}
                   label={{
-                    text: vehicleIcon[v.type] || "🚗",
-                    fontSize: "20px",
+                    text: vehicleEmoji[v.type] || "🚗",
+                    fontSize: "22px",
+                    color: "transparent",
                   }}
                 />
               ))}
-              {selected && (
+              {Object.entries(paths).map(
+                ([vid, path]) =>
+                  path.length > 1 && (
+                    <Polyline
+                      key={vid}
+                      path={path}
+                      options={{
+                        strokeColor: "#3b82f6",
+                        strokeWeight: 2,
+                        strokeOpacity: 0.6,
+                      }}
+                    />
+                  ),
+              )}
+              {selected && selected.latitude && (
                 <InfoWindow
                   position={{ lat: selected.latitude, lng: selected.longitude }}
                   onCloseClick={() => setSelected(null)}
                 >
-                  <div style={styles.infoWindow}>
+                  <div style={s.infoWin}>
                     <strong>
-                      {vehicleIcon[selected.type]} {selected.vehicleId}
+                      {vehicleEmoji[selected.type]} {selected.vehicleId}
                     </strong>
                     <p>Driver: {selected.driverName || "N/A"}</p>
                     <p>
                       Status:{" "}
-                      <span style={{ color: statusColor[selected.status] }}>
+                      <span
+                        style={{
+                          color: statusColor[selected.status],
+                          fontWeight: 600,
+                        }}
+                      >
                         {selected.status}
                       </span>
                     </p>
                     <p>
-                      Updated:{" "}
+                      Incident:{" "}
+                      {selected.incidentServiceId
+                        ? selected.incidentServiceId.slice(0, 8) + "..."
+                        : "None"}
+                    </p>
+                    <p style={{ fontSize: "11px", color: "#94a3b8" }}>
                       {selected.lastUpdated
                         ? new Date(selected.lastUpdated).toLocaleTimeString()
-                        : "N/A"}
+                        : "No update yet"}
                     </p>
                   </div>
                 </InfoWindow>
               )}
             </GoogleMap>
           ) : (
-            <div style={styles.mapLoading}>Loading map...</div>
+            <div style={s.mapLoad}>Loading map...</div>
           )}
         </div>
 
-        <div style={styles.vehicleList}>
-          <h3 style={styles.listTitle}>Fleet Status ({vehicles.length})</h3>
-          {vehicles.map((v) => (
-            <div
-              key={v.vehicleId}
-              style={styles.vehicleCard}
-              onClick={() => v.latitude && setSelected(v)}
-            >
-              <div style={styles.vehicleHeader}>
-                <span style={styles.vehicleId}>
-                  {vehicleIcon[v.type]} {v.vehicleId}
-                </span>
-                <span
-                  style={{
-                    ...styles.statusDot,
-                    backgroundColor: statusColor[v.status] || "#6b7280",
-                  }}
-                >
-                  {v.status}
-                </span>
+        <div style={s.sidebar}>
+          <h3 style={s.sideTitle}>Fleet ({vehicles.length} vehicles)</h3>
+          <div style={s.vehicleList}>
+            {vehicles.map((v) => (
+              <div
+                key={v.vehicleId}
+                style={{
+                  ...s.vCard,
+                  borderLeft: `3px solid ${statusColor[v.status] || "#e2e8f0"}`,
+                }}
+              >
+                <div style={s.vHeader}>
+                  <span style={s.vId}>
+                    {vehicleEmoji[v.type]} {v.vehicleId}
+                  </span>
+                  <span
+                    style={{
+                      ...s.vStatus,
+                      backgroundColor: statusColor[v.status] + "20",
+                      color: statusColor[v.status],
+                    }}
+                  >
+                    {v.status}
+                  </span>
+                </div>
+                <p style={s.vInfo}>Driver: {v.driverName || "N/A"}</p>
+                <p style={s.vInfo}>
+                  {v.latitude
+                    ? `📍 ${v.latitude.toFixed(4)}, ${v.longitude.toFixed(4)}`
+                    : "📍 No location yet"}
+                </p>
+                {v.incidentServiceId && (
+                  <p style={{ ...s.vInfo, color: "#ef4444" }}>
+                    🚨 Incident: {v.incidentServiceId.slice(0, 8)}...
+                  </p>
+                )}
+
+                <div style={s.vActions}>
+                  <button
+                    style={{
+                      ...s.simBtn,
+                      backgroundColor: simulating[v.vehicleId]
+                        ? "#fef2f2"
+                        : "#f0fdf4",
+                      color: simulating[v.vehicleId] ? "#dc2626" : "#16a34a",
+                      border: `1px solid ${simulating[v.vehicleId] ? "#fecaca" : "#bbf7d0"}`,
+                    }}
+                    onClick={() =>
+                      simulateMovement(v.vehicleId, v.latitude, v.longitude)
+                    }
+                  >
+                    {simulating[v.vehicleId] ? "⏹ Stop GPS" : "▶ Simulate GPS"}
+                  </button>
+                </div>
+
+                {incidents.length > 0 && v.status === "available" && (
+                  <div style={s.assignWrap}>
+                    <select
+                      style={s.assignSelect}
+                      defaultValue=""
+                      onChange={(e) =>
+                        e.target.value &&
+                        assignVehicle(v.vehicleId, e.target.value)
+                      }
+                    >
+                      <option value="">Assign to incident...</option>
+                      {incidents.map((inc) => (
+                        <option key={inc.incidentId} value={inc.incidentId}>
+                          {inc.incidentType} — {inc.citizenName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
-              <p style={styles.vehicleInfo}>Driver: {v.driverName || "N/A"}</p>
-              <p style={styles.vehicleInfo}>
-                {v.latitude
-                  ? `📍 ${v.latitude.toFixed(4)}, ${v.longitude.toFixed(4)}`
-                  : "📍 No location yet"}
-              </p>
-            </div>
-          ))}
-          {vehicles.length === 0 && (
-            <p style={styles.empty}>No vehicles registered yet.</p>
-          )}
+            ))}
+            {vehicles.length === 0 && (
+              <p style={s.empty}>No vehicles registered yet.</p>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-const styles = {
-  container: { padding: "24px", maxWidth: "1400px", margin: "0 auto" },
+const s = {
+  page: { padding: "28px", maxWidth: "1400px", margin: "0 auto" },
   header: {
     display: "flex",
+    justifyContent: "space-between",
     alignItems: "center",
-    gap: "12px",
-    marginBottom: "4px",
+    marginBottom: "20px",
   },
-  title: { fontSize: "24px", fontWeight: "bold", color: "#1a3a5c", margin: 0 },
+  title: {
+    fontSize: "26px",
+    fontWeight: "700",
+    color: "#0f172a",
+    margin: "0 0 4px",
+    letterSpacing: "-0.5px",
+  },
+  subtitle: { fontSize: "13px", color: "#64748b", margin: 0 },
   connBadge: {
-    padding: "4px 12px",
+    display: "flex",
+    alignItems: "center",
+    padding: "6px 14px",
     borderRadius: "20px",
     fontSize: "13px",
     fontWeight: "600",
   },
-  subtitle: { fontSize: "13px", color: "#9ca3af", margin: "0 0 20px" },
-  layout: { display: "grid", gridTemplateColumns: "1fr 300px", gap: "20px" },
-  mapWrapper: {},
-  mapLoading: {
-    height: "500px",
+  layout: { display: "grid", gridTemplateColumns: "1fr 320px", gap: "20px" },
+  mapSide: {},
+  mapLoad: {
+    height: "540px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#f3f4f6",
-    borderRadius: "8px",
+    backgroundColor: "#f8fafc",
+    borderRadius: "10px",
+    color: "#94a3b8",
   },
-  vehicleList: { display: "flex", flexDirection: "column", gap: "10px" },
-  listTitle: {
-    fontSize: "16px",
+  sidebar: { display: "flex", flexDirection: "column", gap: "12px" },
+  sideTitle: {
+    fontSize: "15px",
     fontWeight: "600",
-    color: "#1a3a5c",
-    margin: "0 0 8px",
+    color: "#0f172a",
+    margin: 0,
   },
-  vehicleCard: {
-    backgroundColor: "white",
-    borderRadius: "8px",
+  vehicleList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+    overflowY: "auto",
+    maxHeight: "540px",
+  },
+  vCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: "10px",
     padding: "14px",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-    cursor: "pointer",
-    borderLeft: "3px solid #3b82f6",
+    border: "1px solid #e2e8f0",
   },
-  vehicleHeader: {
+  vHeader: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: "6px",
+    marginBottom: "8px",
   },
-  vehicleId: { fontSize: "14px", fontWeight: "600", color: "#1a3a5c" },
-  statusDot: {
+  vId: { fontSize: "13px", fontWeight: "600", color: "#0f172a" },
+  vStatus: {
+    fontSize: "11px",
     padding: "2px 8px",
     borderRadius: "10px",
-    fontSize: "11px",
-    color: "white",
-    fontWeight: "500",
+    fontWeight: "600",
   },
-  vehicleInfo: { fontSize: "12px", color: "#6b7280", margin: "2px 0" },
-  infoWindow: { fontSize: "13px", lineHeight: "1.6" },
+  vInfo: { fontSize: "12px", color: "#64748b", margin: "2px 0" },
+  vActions: { marginTop: "10px" },
+  simBtn: {
+    width: "100%",
+    padding: "7px",
+    borderRadius: "7px",
+    fontSize: "12px",
+    fontWeight: "600",
+    cursor: "pointer",
+  },
+  assignWrap: { marginTop: "8px" },
+  assignSelect: {
+    width: "100%",
+    padding: "7px 10px",
+    borderRadius: "7px",
+    border: "1px solid #e2e8f0",
+    fontSize: "12px",
+    color: "#374151",
+    backgroundColor: "#f8fafc",
+  },
+  infoWin: { fontSize: "13px", lineHeight: "1.7", minWidth: "160px" },
   empty: {
-    color: "#9ca3af",
+    color: "#94a3b8",
     fontSize: "13px",
     textAlign: "center",
     padding: "20px",

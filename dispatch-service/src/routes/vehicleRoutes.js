@@ -6,6 +6,8 @@ const {
   getVehicleLocation,
   updateLocation,
   updateStatus,
+  assignToIncident,
+  getVehiclesByIncident,
 } = require("../controllers/vehicleController");
 const { authenticate, authorize } = require("../middleware/auth");
 const {
@@ -14,7 +16,6 @@ const {
   locationRules,
 } = require("../middleware/validate");
 
-// Register a new vehicle
 router.post(
   "/vehicles/register",
   authenticate,
@@ -28,14 +29,8 @@ router.post(
   validate,
   registerVehicle,
 );
-
-// Get all vehicles
 router.get("/vehicles", authenticate, getVehicles);
-
-// Get vehicle location
 router.get("/vehicles/:id/location", authenticate, getVehicleLocation);
-
-// Update vehicle GPS location (driver's phone)
 router.put(
   "/vehicles/:id/location",
   authenticate,
@@ -43,8 +38,17 @@ router.put(
   validate,
   updateLocation,
 );
-
-// Update vehicle status
 router.put("/vehicles/:id/status", authenticate, updateStatus);
+router.post(
+  "/vehicles/assign",
+  authenticate,
+  authorize("system_admin"),
+  assignToIncident,
+);
+router.get(
+  "/vehicles/incident/:incidentId",
+  authenticate,
+  getVehiclesByIncident,
+);
 
 module.exports = router;
