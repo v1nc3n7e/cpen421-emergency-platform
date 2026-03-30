@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   GoogleMap,
   useJsApiLoader,
@@ -7,7 +7,12 @@ import {
   Polyline,
 } from "@react-google-maps/api";
 import { io } from "socket.io-client";
-import { getVehicles, getOpenIncidents } from "../services/api";
+import {
+  getVehicles,
+  getOpenIncidents,
+  registerVehicle,
+} from "../services/api";
+import { useAuth } from "../context/AuthContext";
 import axios from "axios";
 
 const mapContainerStyle = {
@@ -24,12 +29,23 @@ const statusColor = {
 };
 
 export default function VehicleTracking() {
+  const { user } = useAuth();
   const [vehicles, setVehicles] = useState([]);
   const [incidents, setIncidents] = useState([]);
   const [selected, setSelected] = useState(null);
   const [connected, setConnected] = useState(false);
   const [paths, setPaths] = useState({});
   const [simulating, setSimulating] = useState({});
+  const [showRegisterForm, setShowRegisterForm] = useState(false);
+  const [newVehicle, setNewVehicle] = useState({
+    vehicleId: "",
+    type: "ambulance",
+    stationId: "",
+    driverName: "",
+  });
+  const [registerLoading, setRegisterLoading] = useState(false);
+  const [registerError, setRegisterError] = useState("");
+  const [registerSuccess, setRegisterSuccess] = useState("");
   const socketRef = useRef(null);
   const simIntervals = useRef({});
 
@@ -91,17 +107,53 @@ export default function VehicleTracking() {
     };
   }, []);
 
+  const handleRegisterVehicle = async () => {
+    if (
+      !newVehicle.vehicleId ||
+      !newVehicle.stationId ||
+      !newVehicle.driverName
+    ) {
+      setRegisterError("Please fill in all fields.");
+      return;
+    }
+    setRegisterLoading(true);
+    setRegisterError("");
+    setRegisterSuccess("");
+    try {
+      await registerVehicle(newVehicle);
+      setRegisterSuccess(
+        `Vehicle ${newVehicle.vehicleId} registered successfully!`,
+      );
+      setNewVehicle({
+        vehicleId: "",
+        type: "ambulance",
+        stationId: "",
+        driverName: "",
+      });
+      const v = await getVehicles();
+      setVehicles(v.data.data);
+      setTimeout(() => {
+        setShowRegisterForm(false);
+        setRegisterSuccess("");
+      }, 2000);
+    } catch (err) {
+      setRegisterError(
+        err.response?.data?.message || "Failed to register vehicle.",
+      );
+    } finally {
+      setRegisterLoading(false);
+    }
+  };
+
   const simulateMovement = (vehicleId, startLat, startLng) => {
     if (simulating[vehicleId]) {
       clearInterval(simIntervals.current[vehicleId]);
       setSimulating((prev) => ({ ...prev, [vehicleId]: false }));
       return;
     }
-
     setSimulating((prev) => ({ ...prev, [vehicleId]: true }));
     let lat = startLat || 5.6037;
     let lng = startLng || -0.187;
-
     simIntervals.current[vehicleId] = setInterval(async () => {
       lat += (Math.random() - 0.5) * 0.002;
       lng += (Math.random() - 0.5) * 0.002;
@@ -145,27 +197,113 @@ export default function VehicleTracking() {
           <h1 style={s.title}>Vehicle Tracking</h1>
           <p style={s.subtitle}>Real-time GPS tracking via WebSocket</p>
         </div>
-        <span
-          style={{
-            ...s.connBadge,
-            backgroundColor: connected ? "#f0fdf4" : "#fef2f2",
-            color: connected ? "#16a34a" : "#dc2626",
-            border: `1px solid ${connected ? "#bbf7d0" : "#fecaca"}`,
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          {user?.role === "system_admin" && (
+            <button
+              style={s.registerBtn}
+              onClick={() => {
+                setShowRegisterForm(!showRegisterForm);
+                setRegisterError("");
+                setRegisterSuccess("");
+              }}
+            >
+              {showRegisterForm ? "✕ Cancel" : "+ Register Vehicle"}
+            </button>
+          )}
           <span
             style={{
-              width: "8px",
-              height: "8px",
-              borderRadius: "50%",
-              backgroundColor: connected ? "#22c55e" : "#ef4444",
-              display: "inline-block",
-              marginRight: "6px",
+              ...s.connBadge,
+              backgroundColor: connected ? "#f0fdf4" : "#fef2f2",
+              color: connected ? "#16a34a" : "#dc2626",
+              border: `1px solid ${connected ? "#bbf7d0" : "#fecaca"}`,
             }}
-          />
-          {connected ? "Live" : "Disconnected"}
-        </span>
+          >
+            <span
+              style={{
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                backgroundColor: connected ? "#22c55e" : "#ef4444",
+                display: "inline-block",
+                marginRight: "6px",
+              }}
+            />
+            {connected ? "Live" : "Disconnected"}
+          </span>
+        </div>
       </div>
+
+      {showRegisterForm && (
+        <div style={s.formCard}>
+          <h3 style={s.formTitle}>Register New Vehicle</h3>
+          <div style={s.formGrid}>
+            <div style={s.formField}>
+              <label style={s.formLabel}>Vehicle ID</label>
+              <input
+                style={s.formInput}
+                value={newVehicle.vehicleId}
+                onChange={(e) =>
+                  setNewVehicle({ ...newVehicle, vehicleId: e.target.value })
+                }
+                placeholder="e.g. AMB-002"
+              />
+            </div>
+            <div style={s.formField}>
+              <label style={s.formLabel}>Type</label>
+              <select
+                style={s.formInput}
+                value={newVehicle.type}
+                onChange={(e) =>
+                  setNewVehicle({ ...newVehicle, type: e.target.value })
+                }
+              >
+                <option value="ambulance">🚑 Ambulance</option>
+                <option value="police">🚔 Police</option>
+                <option value="fire">🚒 Fire Truck</option>
+              </select>
+            </div>
+            <div style={s.formField}>
+              <label style={s.formLabel}>Station / Hospital ID</label>
+              <input
+                style={s.formInput}
+                value={newVehicle.stationId}
+                onChange={(e) =>
+                  setNewVehicle({ ...newVehicle, stationId: e.target.value })
+                }
+                placeholder="e.g. korle-bu-hospital"
+              />
+            </div>
+            <div style={s.formField}>
+              <label style={s.formLabel}>Driver Name</label>
+              <input
+                style={s.formInput}
+                value={newVehicle.driverName}
+                onChange={(e) =>
+                  setNewVehicle({ ...newVehicle, driverName: e.target.value })
+                }
+                placeholder="e.g. Kwame Asante"
+              />
+            </div>
+          </div>
+          {registerError && <p style={s.formError}>{registerError}</p>}
+          {registerSuccess && <p style={s.formSuccess}>{registerSuccess}</p>}
+          <div style={s.formActions}>
+            <button
+              style={s.cancelBtn}
+              onClick={() => setShowRegisterForm(false)}
+            >
+              Cancel
+            </button>
+            <button
+              style={s.submitBtn}
+              onClick={handleRegisterVehicle}
+              disabled={registerLoading}
+            >
+              {registerLoading ? "Registering..." : "Register Vehicle"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div style={s.layout}>
         <div style={s.mapSide}>
@@ -278,7 +416,6 @@ export default function VehicleTracking() {
                     🚨 Incident: {v.incidentServiceId.slice(0, 8)}...
                   </p>
                 )}
-
                 <div style={s.vActions}>
                   <button
                     style={{
@@ -296,7 +433,6 @@ export default function VehicleTracking() {
                     {simulating[v.vehicleId] ? "⏹ Stop GPS" : "▶ Simulate GPS"}
                   </button>
                 </div>
-
                 {incidents.length > 0 && v.status === "available" && (
                   <div style={s.assignWrap}>
                     <select
@@ -352,6 +488,68 @@ const s = {
     fontSize: "13px",
     fontWeight: "600",
   },
+  registerBtn: {
+    padding: "8px 16px",
+    backgroundColor: "#0f172a",
+    color: "#f8fafc",
+    border: "none",
+    borderRadius: "8px",
+    fontSize: "13px",
+    fontWeight: "600",
+    cursor: "pointer",
+  },
+  formCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: "12px",
+    border: "1px solid #e2e8f0",
+    padding: "20px",
+    marginBottom: "20px",
+  },
+  formTitle: {
+    fontSize: "15px",
+    fontWeight: "600",
+    color: "#0f172a",
+    margin: "0 0 16px",
+  },
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "14px",
+    marginBottom: "16px",
+  },
+  formField: { display: "flex", flexDirection: "column", gap: "5px" },
+  formLabel: { fontSize: "12px", fontWeight: "600", color: "#374151" },
+  formInput: {
+    padding: "9px 12px",
+    borderRadius: "7px",
+    border: "1px solid #e2e8f0",
+    fontSize: "13px",
+    color: "#0f172a",
+    outline: "none",
+  },
+  formActions: { display: "flex", justifyContent: "flex-end", gap: "10px" },
+  cancelBtn: {
+    padding: "8px 16px",
+    backgroundColor: "#f1f5f9",
+    color: "#374151",
+    border: "none",
+    borderRadius: "7px",
+    fontSize: "13px",
+    fontWeight: "600",
+    cursor: "pointer",
+  },
+  submitBtn: {
+    padding: "8px 20px",
+    backgroundColor: "#0f172a",
+    color: "#f8fafc",
+    border: "none",
+    borderRadius: "7px",
+    fontSize: "13px",
+    fontWeight: "600",
+    cursor: "pointer",
+  },
+  formError: { color: "#dc2626", fontSize: "13px", margin: "0 0 12px" },
+  formSuccess: { color: "#16a34a", fontSize: "13px", margin: "0 0 12px" },
   layout: { display: "grid", gridTemplateColumns: "1fr 320px", gap: "20px" },
   mapSide: {},
   mapLoad: {
