@@ -8,8 +8,11 @@ const {
   updateStatus,
   assignToIncident,
   getVehiclesByIncident,
+  getVehicleHistory,
+  deleteVehicle,
+  autoAssignVehicle,
 } = require("../controllers/vehicleController");
-const { authenticate, authorize } = require("../middleware/auth");
+const { authenticate, authorize, authenticateInternal } = require("../middleware/auth");
 const {
   validate,
   registerVehicleRules,
@@ -50,5 +53,15 @@ router.get(
   authenticate,
   getVehiclesByIncident,
 );
+router.get("/vehicles/:id/history", authenticate, getVehicleHistory);
+router.delete(
+  "/vehicles/:id",
+  authenticate,
+  authorize("system_admin"),
+  deleteVehicle,
+);
+
+// Internal endpoint — called by incident-service to auto-assign a vehicle
+router.post("/vehicles/auto-assign", authenticateInternal, autoAssignVehicle);
 
 module.exports = router;

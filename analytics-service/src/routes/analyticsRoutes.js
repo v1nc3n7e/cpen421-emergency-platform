@@ -4,6 +4,7 @@ const {
   getResponseTimes,
   getIncidentsByRegion,
   getResourceUtilization,
+  getHospitalCapacity,
 } = require("../controllers/analyticsController");
 const { authenticate } = require("../middleware/auth");
 
@@ -18,5 +19,6 @@ router.get(
   authenticate,
   getResourceUtilization,
 );
+router.get("/analytics/hospital-capacity", authenticate, getHospitalCapacity);
 
 module.exports = router;

@@ -43,6 +43,18 @@ export const getVehicleLocation = (id) =>
   axios.get(`${DISPATCH_URL}/vehicles/${id}/location`, authHeaders());
 export const registerVehicle = (data) =>
   axios.post(`${DISPATCH_URL}/vehicles/register`, data, authHeaders());
+export const getVehicleHistory = (id) =>
+  axios.get(`${DISPATCH_URL}/vehicles/${id}/history`, authHeaders());
+export const deleteVehicle = (id) =>
+  axios.delete(`${DISPATCH_URL}/vehicles/${id}`, authHeaders());
+
+// Hospitals
+export const getHospitals = () =>
+  axios.get(`${INCIDENT_URL}/hospitals`, authHeaders());
+export const createHospital = (data) =>
+  axios.post(`${INCIDENT_URL}/hospitals`, data, authHeaders());
+export const updateHospitalBeds = (id, data) =>
+  axios.put(`${INCIDENT_URL}/hospitals/${id}/beds`, data, authHeaders());
 
 // Analytics
 export const getResponseTimes = () =>
@@ -51,3 +63,5 @@ export const getIncidentsByRegion = () =>
   axios.get(`${ANALYTICS_URL}/analytics/incidents-by-region`, authHeaders());
 export const getResourceUtilization = () =>
   axios.get(`${ANALYTICS_URL}/analytics/resource-utilization`, authHeaders());
+export const getHospitalCapacity = () =>
+  axios.get(`${ANALYTICS_URL}/analytics/hospital-capacity`, authHeaders());

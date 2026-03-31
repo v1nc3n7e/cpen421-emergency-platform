@@ -16,6 +16,7 @@ import {
   getResponseTimes,
   getIncidentsByRegion,
   getResourceUtilization,
+  getHospitalCapacity,
 } from "../services/api";
 
 const COLORS = [
@@ -31,6 +32,7 @@ export default function Analytics() {
   const [responseTimes, setResponseTimes] = useState(null);
   const [incidentStats, setIncidentStats] = useState(null);
   const [utilization, setUtilization] = useState(null);
+  const [hospitalCapacity, setHospitalCapacity] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,11 +40,13 @@ export default function Analytics() {
       getResponseTimes(),
       getIncidentsByRegion(),
       getResourceUtilization(),
+      getHospitalCapacity(),
     ])
-      .then(([rt, is, ru]) => {
+      .then(([rt, is, ru, hc]) => {
         setResponseTimes(rt.data.data);
         setIncidentStats(is.data.data);
         setUtilization(ru.data.data);
+        setHospitalCapacity(hc.data.data);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -92,9 +96,9 @@ export default function Analytics() {
         </div>
         <div style={styles.statCard}>
           <div style={styles.statNum}>
-            {responseTimes?.overall?.overall_avg_response_minutes || "0.00"} min
+            {responseTimes?.overall?.overall_avg_response_minutes || responseTimes?.overall?.overall_avg_dispatch_minutes || "0.00"} min
           </div>
-          <div style={styles.statLabel}>Avg Response Time</div>
+          <div style={styles.statLabel}>Avg Total Response</div>
         </div>
         <div style={styles.statCard}>
           <div style={styles.statNum}>{utilization?.vehicles?.length || 0}</div>
@@ -191,18 +195,131 @@ export default function Analytics() {
         </div>
       </div>
 
+      {/* Hospital Bed Usage */}
+      <div style={styles.chartCard}>
+        <h3 style={styles.chartTitle}>Hospital Bed Usage</h3>
+        {hospitalCapacity?.summary && (
+          <div style={styles.hospitalSummary}>
+            <div style={styles.hospitalStat}>
+              <span style={styles.hospitalNum}>{hospitalCapacity.summary.total_hospitals}</span>
+              <span style={styles.hospitalLabel}>Hospitals</span>
+            </div>
+            <div style={styles.hospitalStat}>
+              <span style={styles.hospitalNum}>{hospitalCapacity.summary.total_beds}</span>
+              <span style={styles.hospitalLabel}>Total Beds</span>
+            </div>
+            <div style={styles.hospitalStat}>
+              <span style={{ ...styles.hospitalNum, color: "#16a34a" }}>{hospitalCapacity.summary.available_beds}</span>
+              <span style={styles.hospitalLabel}>Available</span>
+            </div>
+            <div style={styles.hospitalStat}>
+              <span style={{ ...styles.hospitalNum, color: "#dc2626" }}>{hospitalCapacity.summary.occupied_beds}</span>
+              <span style={styles.hospitalLabel}>Occupied</span>
+            </div>
+            <div style={styles.hospitalStat}>
+              <span style={{ ...styles.hospitalNum, color: "#f59e0b" }}>{hospitalCapacity.summary.overall_occupancy_rate}%</span>
+              <span style={styles.hospitalLabel}>Occupancy</span>
+            </div>
+          </div>
+        )}
+        {hospitalCapacity?.hospitals?.length > 0 ? (
+          <table style={styles.table}>
+            <thead>
+              <tr style={{ backgroundColor: "#f3f4f6" }}>
+                <th style={styles.th}>Hospital</th>
+                <th style={styles.th}>Total Beds</th>
+                <th style={styles.th}>Available</th>
+                <th style={styles.th}>Occupied</th>
+                <th style={styles.th}>Occupancy %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {hospitalCapacity.hospitals.map((h, i) => (
+                <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "white" : "#f9fafb" }}>
+                  <td style={styles.td}>{h.name}</td>
+                  <td style={styles.td}>{h.total_beds}</td>
+                  <td style={{ ...styles.td, color: "#16a34a", fontWeight: "600" }}>{h.available_beds}</td>
+                  <td style={{ ...styles.td, color: "#dc2626" }}>{h.occupied_beds}</td>
+                  <td style={styles.td}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <div style={{ flex: 1, height: "6px", backgroundColor: "#e5e7eb", borderRadius: "3px" }}>
+                        <div style={{ width: `${h.occupancy_rate}%`, height: "100%", backgroundColor: h.occupancy_rate > 85 ? "#dc2626" : h.occupancy_rate > 60 ? "#f59e0b" : "#16a34a", borderRadius: "3px" }} />
+                      </div>
+                      <span style={{ fontSize: "12px", fontWeight: "600" }}>{h.occupancy_rate}%</span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p style={styles.empty}>No hospital data yet. Register hospitals via the API.</p>
+        )}
+      </div>
+
+      {/* Incidents by Region */}
+      {incidentStats?.byRegion?.length > 0 && (
+        <div style={styles.chartCard}>
+          <h3 style={styles.chartTitle}>Incidents by Region (Geographic Grid)</h3>
+          <p style={{ fontSize: "12px", color: "#9ca3af", marginBottom: "12px" }}>
+            Grid cells ~11 km × 11 km (lat/lng rounded to 1 decimal place)
+          </p>
+          <table style={styles.table}>
+            <thead>
+              <tr style={{ backgroundColor: "#f3f4f6" }}>
+                <th style={styles.th}>Region (Lat, Lng)</th>
+                <th style={styles.th}>Incident Type</th>
+                <th style={styles.th}>Total</th>
+                <th style={styles.th}>Resolved</th>
+                <th style={styles.th}>Open</th>
+              </tr>
+            </thead>
+            <tbody>
+              {incidentStats.byRegion.map((r, i) => (
+                <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "white" : "#f9fafb" }}>
+                  <td style={styles.td}>{r.lat_grid}, {r.lng_grid}</td>
+                  <td style={styles.td}>{r.incident_type.replace(/_/g, " ")}</td>
+                  <td style={{ ...styles.td, fontWeight: "600" }}>{r.total}</td>
+                  <td style={{ ...styles.td, color: "#16a34a" }}>{r.resolved}</td>
+                  <td style={{ ...styles.td, color: "#dc2626" }}>{r.open}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* Response Times Table */}
       <div style={styles.chartCard}>
         <h3 style={styles.chartTitle}>Response Times by Incident Type</h3>
+        <p style={{ fontSize: "12px", color: "#9ca3af", marginBottom: "12px" }}>
+          Dispatch time = incident created → unit dispatched &nbsp;|&nbsp; Travel time = dispatched → on scene &nbsp;|&nbsp; Total = created → on scene
+        </p>
+        {responseTimes?.overall && (
+          <div style={{ display: "flex", gap: "20px", marginBottom: "16px", flexWrap: "wrap" }}>
+            <div style={{ padding: "10px 16px", backgroundColor: "#eff6ff", borderRadius: "8px", textAlign: "center" }}>
+              <div style={{ fontSize: "18px", fontWeight: "700", color: "#2563eb" }}>{responseTimes.overall.overall_avg_dispatch_minutes || "—"} min</div>
+              <div style={{ fontSize: "11px", color: "#6b7280" }}>Avg Dispatch Time</div>
+            </div>
+            <div style={{ padding: "10px 16px", backgroundColor: "#f5f3ff", borderRadius: "8px", textAlign: "center" }}>
+              <div style={{ fontSize: "18px", fontWeight: "700", color: "#7c3aed" }}>{responseTimes.overall.overall_avg_travel_minutes || "—"} min</div>
+              <div style={{ fontSize: "11px", color: "#6b7280" }}>Avg Travel Time</div>
+            </div>
+            <div style={{ padding: "10px 16px", backgroundColor: "#f0fdf4", borderRadius: "8px", textAlign: "center" }}>
+              <div style={{ fontSize: "18px", fontWeight: "700", color: "#16a34a" }}>{responseTimes.overall.overall_avg_response_minutes || "—"} min</div>
+              <div style={{ fontSize: "11px", color: "#6b7280" }}>Avg Total Response</div>
+            </div>
+          </div>
+        )}
         {responseTimes?.byIncidentType?.length > 0 ? (
           <table style={styles.table}>
             <thead>
               <tr style={{ backgroundColor: "#f3f4f6" }}>
                 <th style={styles.th}>Incident Type</th>
                 <th style={styles.th}>Total</th>
-                <th style={styles.th}>Avg (min)</th>
-                <th style={styles.th}>Min (min)</th>
-                <th style={styles.th}>Max (min)</th>
+                <th style={styles.th}>Avg Dispatch (min)</th>
+                <th style={styles.th}>Avg Travel (min)</th>
+                <th style={styles.th}>Avg Total (min)</th>
               </tr>
             </thead>
             <tbody>
@@ -211,11 +328,11 @@ export default function Analytics() {
                   key={i}
                   style={{ backgroundColor: i % 2 === 0 ? "white" : "#f9fafb" }}
                 >
-                  <td style={styles.td}>{r.incident_type.replace("_", " ")}</td>
+                  <td style={styles.td}>{r.incident_type.replace(/_/g, " ")}</td>
                   <td style={styles.td}>{r.total_incidents}</td>
-                  <td style={styles.td}>{r.avg_response_time_minutes}</td>
-                  <td style={styles.td}>{r.min_response_time_minutes}</td>
-                  <td style={styles.td}>{r.max_response_time_minutes}</td>
+                  <td style={styles.td}>{r.avg_dispatch_time_minutes ?? "—"}</td>
+                  <td style={{ ...styles.td, color: "#7c3aed" }}>{r.avg_travel_time_minutes ?? "—"}</td>
+                  <td style={{ ...styles.td, fontWeight: "600", color: "#16a34a" }}>{r.avg_total_response_minutes ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -295,5 +412,28 @@ const styles = {
     fontSize: "13px",
     textAlign: "center",
     padding: "20px",
+  },
+  hospitalSummary: {
+    display: "flex",
+    gap: "24px",
+    marginBottom: "16px",
+    padding: "12px 16px",
+    backgroundColor: "#f8fafc",
+    borderRadius: "8px",
+  },
+  hospitalStat: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "2px",
+  },
+  hospitalNum: {
+    fontSize: "22px",
+    fontWeight: "700",
+    color: "#1a3a5c",
+  },
+  hospitalLabel: {
+    fontSize: "11px",
+    color: "#6b7280",
   },
 };

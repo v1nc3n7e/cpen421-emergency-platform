@@ -53,4 +53,28 @@ const responderRules = [
   body("hospitalId").optional().isString(),
 ];
 
-module.exports = { validate, incidentRules, statusRules, responderRules };
+const hospitalRules = [
+  body("name").trim().notEmpty().withMessage("Hospital name is required"),
+  body("latitude")
+    .isFloat({ min: -90, max: 90 })
+    .withMessage("Valid latitude is required"),
+  body("longitude")
+    .isFloat({ min: -180, max: 180 })
+    .withMessage("Valid longitude is required"),
+  body("totalBeds")
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage("Total beds must be a non-negative integer"),
+  body("availableBeds")
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage("Available beds must be a non-negative integer"),
+];
+
+module.exports = {
+  validate,
+  incidentRules,
+  statusRules,
+  responderRules,
+  hospitalRules,
+};

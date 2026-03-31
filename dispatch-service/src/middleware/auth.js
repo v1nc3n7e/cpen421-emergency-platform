@@ -43,4 +43,15 @@ const authorize = (...roles) => {
   };
 };
 
-module.exports = { authenticate, authorize };
+// Used for service-to-service calls (e.g. incident-service → dispatch-service)
+const authenticateInternal = (req, res, next) => {
+  const key = req.headers["x-internal-service-key"];
+  if (!key || key !== process.env.INTERNAL_SERVICE_KEY) {
+    return res
+      .status(401)
+      .json({ success: false, message: "Unauthorized internal call." });
+  }
+  next();
+};
+
+module.exports = { authenticate, authorize, authenticateInternal };

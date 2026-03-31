@@ -10,13 +10,15 @@ const getResponseTimes = async (req, res) => {
       SELECT
         incident_type,
         COUNT(*) AS total_incidents,
-        ROUND(AVG(EXTRACT(EPOCH FROM (dispatched_at - created_at)) / 60)::numeric, 2) AS avg_response_time_minutes,
-        ROUND(MIN(EXTRACT(EPOCH FROM (dispatched_at - created_at)) / 60)::numeric, 2) AS min_response_time_minutes,
-        ROUND(MAX(EXTRACT(EPOCH FROM (dispatched_at - created_at)) / 60)::numeric, 2) AS max_response_time_minutes
+        ROUND(AVG(EXTRACT(EPOCH FROM (dispatched_at - created_at)) / 60)::numeric, 2) AS avg_dispatch_time_minutes,
+        ROUND(MIN(EXTRACT(EPOCH FROM (dispatched_at - created_at)) / 60)::numeric, 2) AS min_dispatch_time_minutes,
+        ROUND(MAX(EXTRACT(EPOCH FROM (dispatched_at - created_at)) / 60)::numeric, 2) AS max_dispatch_time_minutes,
+        ROUND(AVG(EXTRACT(EPOCH FROM (in_progress_at - dispatched_at)) / 60)::numeric, 2) AS avg_travel_time_minutes,
+        ROUND(AVG(EXTRACT(EPOCH FROM (in_progress_at - created_at)) / 60)::numeric, 2) AS avg_total_response_minutes
       FROM incidents
       WHERE dispatched_at IS NOT NULL
       GROUP BY incident_type
-      ORDER BY avg_response_time_minutes ASC
+      ORDER BY avg_total_response_minutes ASC NULLS LAST
     `);
 
     const overall = await incidentPool.query(`
@@ -26,7 +28,9 @@ const getResponseTimes = async (req, res) => {
         COUNT(CASE WHEN status = 'dispatched' THEN 1 END) AS dispatched,
         COUNT(CASE WHEN status = 'in_progress' THEN 1 END) AS in_progress,
         COUNT(CASE WHEN status = 'created' THEN 1 END) AS pending,
-        ROUND(AVG(EXTRACT(EPOCH FROM (dispatched_at - created_at)) / 60)::numeric, 2) AS overall_avg_response_minutes
+        ROUND(AVG(EXTRACT(EPOCH FROM (dispatched_at - created_at)) / 60)::numeric, 2) AS overall_avg_dispatch_minutes,
+        ROUND(AVG(EXTRACT(EPOCH FROM (in_progress_at - dispatched_at)) / 60)::numeric, 2) AS overall_avg_travel_minutes,
+        ROUND(AVG(EXTRACT(EPOCH FROM (in_progress_at - created_at)) / 60)::numeric, 2) AS overall_avg_response_minutes
       FROM incidents
       WHERE dispatched_at IS NOT NULL
     `);
@@ -48,7 +52,7 @@ const getResponseTimes = async (req, res) => {
 
 /**
  * GET /analytics/incidents-by-region
- * Number of incidents grouped by type
+ * Number of incidents grouped by type and by geographic region
  */
 const getIncidentsByRegion = async (req, res) => {
   try {
@@ -72,6 +76,21 @@ const getIncidentsByRegion = async (req, res) => {
       ORDER BY total DESC
     `);
 
+    // Geographic grid: round lat/lng to 1 decimal (~11 km buckets) and count by type
+    const byRegion = await incidentPool.query(`
+      SELECT
+        ROUND(latitude::numeric, 1) AS lat_grid,
+        ROUND(longitude::numeric, 1) AS lng_grid,
+        incident_type,
+        COUNT(*) AS total,
+        COUNT(CASE WHEN status = 'resolved' THEN 1 END) AS resolved,
+        COUNT(CASE WHEN status != 'resolved' THEN 1 END) AS open
+      FROM incidents
+      GROUP BY lat_grid, lng_grid, incident_type
+      ORDER BY total DESC
+      LIMIT 50
+    `);
+
     const recent = await incidentPool.query(`
       SELECT
         incident_id,
@@ -91,6 +110,7 @@ const getIncidentsByRegion = async (req, res) => {
       data: {
         byIncidentType: byType.rows,
         byStatus: byStatus.rows,
+        byRegion: byRegion.rows,
         recentIncidents: recent.rows,
       },
     });
@@ -170,8 +190,61 @@ const getResourceUtilization = async (req, res) => {
   }
 };
 
+/**
+ * GET /analytics/hospital-capacity
+ * Hospital bed usage statistics
+ */
+const getHospitalCapacity = async (req, res) => {
+  try {
+    const hospitals = await incidentPool.query(`
+      SELECT
+        hospital_id,
+        name,
+        station_id,
+        total_beds,
+        available_beds,
+        (total_beds - available_beds) AS occupied_beds,
+        CASE
+          WHEN total_beds > 0
+          THEN ROUND(((total_beds - available_beds)::numeric / total_beds) * 100, 1)
+          ELSE 0
+        END AS occupancy_rate
+      FROM hospitals
+      ORDER BY occupancy_rate DESC
+    `);
+
+    const summary = await incidentPool.query(`
+      SELECT
+        COUNT(*) AS total_hospitals,
+        COALESCE(SUM(total_beds), 0) AS total_beds,
+        COALESCE(SUM(available_beds), 0) AS available_beds,
+        COALESCE(SUM(total_beds - available_beds), 0) AS occupied_beds,
+        CASE
+          WHEN COALESCE(SUM(total_beds), 0) > 0
+          THEN ROUND((COALESCE(SUM(total_beds - available_beds), 0)::numeric / SUM(total_beds)) * 100, 1)
+          ELSE 0
+        END AS overall_occupancy_rate
+      FROM hospitals
+    `);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        hospitals: hospitals.rows,
+        summary: summary.rows[0],
+      },
+    });
+  } catch (error) {
+    console.error("Hospital capacity error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error." });
+  }
+};
+
 module.exports = {
   getResponseTimes,
   getIncidentsByRegion,
   getResourceUtilization,
+  getHospitalCapacity,
 };

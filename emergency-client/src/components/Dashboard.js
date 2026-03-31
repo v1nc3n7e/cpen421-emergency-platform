@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getOpenIncidents, getResponders, getVehicles } from "../services/api";
+import { getOpenIncidents, getVehicles } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 
 const statusConfig = {
@@ -35,15 +35,13 @@ function StatCard({ value, label, color, icon }) {
 export default function Dashboard() {
   const { user } = useAuth();
   const [incidents, setIncidents] = useState([]);
-  const [responders, setResponders] = useState([]);
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = () => {
-    Promise.all([getOpenIncidents(), getResponders(), getVehicles()])
-      .then(([inc, resp, veh]) => {
+    Promise.all([getOpenIncidents(), getVehicles()])
+      .then(([inc, veh]) => {
         setIncidents(inc.data.data);
-        setResponders(resp.data.data);
         setVehicles(veh.data.data);
       })
       .catch(console.error)
@@ -101,18 +99,6 @@ export default function Dashboard() {
           label="In Progress"
           color="#8b5cf6"
           icon="⚡"
-        />
-        <StatCard
-          value={responders.filter((r) => r.isAvailable).length}
-          label="Available Responders"
-          color="#22c55e"
-          icon="✅"
-        />
-        <StatCard
-          value={responders.filter((r) => !r.isAvailable).length}
-          label="Deployed"
-          color="#f59e0b"
-          icon="📡"
         />
         <StatCard
           value={vehicles.length}
@@ -237,7 +223,7 @@ const s = {
   time: { fontSize: "13px", color: "#94a3b8", paddingTop: "6px" },
   statsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(6, 1fr)",
+    gridTemplateColumns: "repeat(4, 1fr)",
     gap: "12px",
     marginBottom: "28px",
   },

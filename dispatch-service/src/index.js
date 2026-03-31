@@ -66,6 +66,7 @@ io.on("connection", (socket) => {
 
     try {
       const Vehicle = require("./models/Vehicle");
+      const VehicleLocationHistory = require("./models/VehicleLocationHistory");
       const vehicle = await Vehicle.findOne({ where: { vehicleId } });
 
       if (vehicle) {
@@ -73,6 +74,14 @@ io.on("connection", (socket) => {
         vehicle.longitude = longitude;
         vehicle.lastUpdated = new Date();
         await vehicle.save();
+
+        // Record location history for movement trail
+        await VehicleLocationHistory.create({
+          vehicleId,
+          latitude,
+          longitude,
+          recordedAt: new Date(),
+        });
 
         // Broadcast to admin room
         io.to("admin_room").emit("vehicle_moved", {

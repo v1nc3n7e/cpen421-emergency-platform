@@ -66,6 +66,13 @@ const Incident = sequelize.define(
       defaultValue: null,
       field: "dispatched_at",
     },
+    inProgressAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: null,
+      field: "in_progress_at",
+      comment: "When responder arrived on scene (status changed to in_progress)",
+    },
     resolvedAt: {
       type: DataTypes.DATE,
       allowNull: true,

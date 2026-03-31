@@ -8,6 +8,9 @@ const {
   assignResponder,
   createResponder,
   getResponders,
+  createHospital,
+  getHospitals,
+  updateHospitalBeds,
 } = require("../controllers/incidentController");
 const { authenticate, authorize } = require("../middleware/auth");
 const {
@@ -15,6 +18,7 @@ const {
   incidentRules,
   statusRules,
   responderRules,
+  hospitalRules,
 } = require("../middleware/validate");
 
 // Incident routes
@@ -57,5 +61,22 @@ router.post(
   createResponder,
 );
 router.get("/responders", authenticate, getResponders);
+
+// Hospital routes
+router.post(
+  "/hospitals",
+  authenticate,
+  authorize("system_admin", "hospital_admin"),
+  hospitalRules,
+  validate,
+  createHospital,
+);
+router.get("/hospitals", authenticate, getHospitals);
+router.put(
+  "/hospitals/:id/beds",
+  authenticate,
+  authorize("system_admin", "hospital_admin"),
+  updateHospitalBeds,
+);
 
 module.exports = router;
