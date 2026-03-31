@@ -101,9 +101,35 @@ export default function VehicleTracking() {
       );
     });
 
+    socketRef.current.on("vehicle_status_changed", (data) => {
+      setVehicles((prev) =>
+        prev.map((v) =>
+          v.vehicleId === data.vehicleId
+            ? {
+                ...v,
+                status: data.status,
+                incidentServiceId: data.incidentServiceId,
+              }
+            : v,
+        ),
+      );
+    });
+
+    // Auto-refresh vehicles and incidents every 15 seconds
+    const refreshInterval = setInterval(async () => {
+      try {
+        const [v, i] = await Promise.all([getVehicles(), getOpenIncidents()]);
+        setVehicles(v.data.data);
+        setIncidents(i.data.data);
+      } catch (err) {
+        console.error("Auto-refresh error:", err);
+      }
+    }, 15000);
+
     return () => {
       socketRef.current?.disconnect();
       Object.values(simIntervals.current).forEach(clearInterval);
+      clearInterval(refreshInterval);
     };
   }, []);
 
@@ -195,7 +221,9 @@ export default function VehicleTracking() {
       <div style={s.header}>
         <div>
           <h1 style={s.title}>Vehicle Tracking</h1>
-          <p style={s.subtitle}>Real-time GPS tracking via WebSocket</p>
+          <p style={s.subtitle}>
+            Real-time GPS tracking via WebSocket · Auto-refreshes every 15s
+          </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           {user?.role === "system_admin" && (

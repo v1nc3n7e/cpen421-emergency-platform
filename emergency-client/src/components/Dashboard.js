@@ -39,7 +39,7 @@ export default function Dashboard() {
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const fetchData = () => {
     Promise.all([getOpenIncidents(), getResponders(), getVehicles()])
       .then(([inc, resp, veh]) => {
         setIncidents(inc.data.data);
@@ -48,6 +48,12 @@ export default function Dashboard() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading)

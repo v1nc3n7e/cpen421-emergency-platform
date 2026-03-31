@@ -25,11 +25,49 @@ export default function DispatchStatus() {
     const interval = setInterval(fetchIncidents, 15000);
     return () => clearInterval(interval);
   }, []);
-
   const handleStatusUpdate = async (id, status) => {
     setUpdating(id);
     try {
       await updateIncidentStatus(id, status);
+
+      // If resolved, free the vehicle in dispatch service
+      if (status === "resolved") {
+        const incident = incidents.find((i) => i.incidentId === id);
+        if (incident?.assignedResponderId) {
+          const token = localStorage.getItem("accessToken");
+          // Find vehicle assigned to this incident and mark as available
+          try {
+            await fetch(
+              `${process.env.REACT_APP_DISPATCH_SERVICE}/vehicles/incident/${id}`,
+              {
+                headers: { Authorization: `Bearer ${token}` },
+              },
+            )
+              .then((res) => res.json())
+              .then(async (data) => {
+                if (data.data?.length > 0) {
+                  const vehicleId = data.data[0].vehicleId;
+                  await fetch(
+                    `${process.env.REACT_APP_DISPATCH_SERVICE}/vehicles/${vehicleId}/status`,
+                    {
+                      method: "PUT",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                      },
+                      body: JSON.stringify({
+                        status: "available",
+                        incidentServiceId: null,
+                      }),
+                    },
+                  );
+                }
+              });
+          } catch (e) {
+            console.error("Vehicle release error:", e);
+          }
+        }
+      }
       fetchIncidents();
     } catch (err) {
       alert("Failed to update status.");
